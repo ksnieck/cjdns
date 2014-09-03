@@ -148,18 +148,7 @@ static void handleBeacon(struct Message* msg, struct ETHInterface* context)
         return;
     }
 
-    //struct sockaddr_dl addr;
-    //Bits_memcpyConst(&addr, &context->addrBase, sizeof(struct sockaddr_dl));
-    //unit8_t* MAC = addr
-    //uint8_t* MAC = LLADDR(&addr);
-
-    //printf("MAC = %02x:%02x:%02x:%02x:%02x:%02x\n",
-    //    MAC[0], MAC[1], MAC[2], MAC[3], MAC[4], MAC[5]);
-
-//    uint8_t* dst = 0;
-//    uint8_t* src = 0;
-
-    unsigned char src[6];
+    uint8_t src[6];
 
     Message_pop(msg, src, 6, NULL);
 
@@ -188,11 +177,8 @@ static void handleBeacon(struct Message* msg, struct ETHInterface* context)
         uint8_t mac[18];
         AddrTools_printMac(mac, src);
         uint8_t publicKey[52];
-        uint8_t publicKeyHex[128];
         Base32_encode(publicKey, 52, beacon->publicKey, 32);
-        Hex_encode(publicKeyHex, 128, beacon->publicKey, 32);
-        Log_debug(context->logger, "Got beacon from [%s] with pubkey [%s.k] hex: [%s]",
-                mac, publicKey, publicKeyHex);
+        Log_debug(context->logger, "Got beacon from [%s] with public key [%s.k]", mac, publicKey);
     #endif
 
     String passStr = { .bytes = (char*) beacon->password, .len = Headers_Beacon_PASSWORD_LEN };
@@ -233,11 +219,6 @@ static void sendBeacon(void* vcontext)
         .length=sizeof(struct Headers_Beacon) + 8
     };
 
-    uint8_t beaconHex[sizeof(struct Headers_Beacon)*2];
-    Hex_encode(beaconHex, sizeof(struct Headers_Beacon)*2,
-            (const uint8_t *)&content.beacon, sizeof(struct Headers_Beacon));
-    Log_debug(context->logger, "Sending beacon [%s]", beaconHex);
-
     int ret;
     if ((ret = sendMessage(&m, &context->generic)) != 0) {
         Log_info(context->logger, "Got error [%d] sending beacon [%s]", ret, strerror(errno));
@@ -252,22 +233,31 @@ static void handleEvent2(struct ETHInterface* context, struct Allocator* message
     // aligned when the idAndPadding is shifted off.
     Message_shift(msg, 2, NULL);
 
-    int rc = read(context->bpf, msg->bytes, buf_len); // buf_len = 1
+    int rc = read(context->bpf, msg->bytes, buf_len);
 
     if (rc < 0) {
         Log_debug(context->logger, "Failed to receive eth frame: %s", strerror(errno));
         return;
     }
-
     Log_debug(context->logger, "Read %d bytes", rc);
 
     // extract bpf header
     struct bpf_hdr bpfhdr;
     Message_pop(msg, &bpfhdr, ((struct bpf_hdr*)msg->bytes)->bh_hdrlen, NULL);
 
+    Log_debug(context->logger,
+            "BPF Frame captured length [%d], original length [%d], header length [%d]",
+            bpfhdr.bh_caplen, bpfhdr.bh_datalen, bpfhdr.bh_hdrlen);
+
     // extract ethernet header
     struct ether_header ethHdr;
     Message_pop(msg, &ethHdr, sizeof(struct ether_header), NULL);
+
+    uint8_t msgSize = rc-((struct bpf_hdr*)msg->bytes)->bh_hdrlen-sizeof(struct ether_header);
+    uint8_t msgHex[msgSize*2];
+    int hret = Hex_encode(msgHex, msgSize*2, (const uint8_t *)msg->bytes, msgSize);
+    if (hret < 1) Log_debug(context->logger, "Hex_encode error %d", hret);
+    Log_debug(context->logger, "Frame data contains %d bytes [%s]", msgSize, msgHex);
 
     // Pop the first 2 bytes of the message containing the node id and amount of padding.
     uint16_t idAndPadding = Message_pop16(msg, NULL);
