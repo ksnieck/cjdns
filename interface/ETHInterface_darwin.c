@@ -239,18 +239,17 @@ static void handleEvent2(struct ETHInterface* context, struct Allocator* message
     Message_pop(msg, &bpfhdr, ((struct bpf_hdr*)msg->bytes)->bh_hdrlen, NULL);
 
     Log_debug(context->logger,
-            "BPF Frame captured length [%d], original length [%d], header length [%d]",
-            bpfhdr.bh_caplen, bpfhdr.bh_datalen, bpfhdr.bh_hdrlen);
+            "BPF Frame lengths: captured [%d], original [%d], bpf header [%d], eth header [%lu]",
+            bpfhdr.bh_caplen, bpfhdr.bh_datalen, bpfhdr.bh_hdrlen, sizeof(struct ether_header));
 
     // extract ethernet header
     struct ether_header ethHdr;
     Message_pop(msg, &ethHdr, sizeof(struct ether_header), NULL);
 
-    uint8_t msgSize = rc-((struct bpf_hdr*)msg->bytes)->bh_hdrlen-sizeof(struct ether_header);
-    uint8_t msgHex[msgSize*2];
-    int hret = Hex_encode(msgHex, msgSize*2, (const uint8_t *)msg->bytes, msgSize);
+    uint8_t msgHex[msg->length*2];
+    int hret = Hex_encode(msgHex, msg->length*2, (const uint8_t *)msg->bytes, msg->length);
     if (hret < 1) Log_debug(context->logger, "Hex_encode error %d", hret);
-    Log_debug(context->logger, "Frame data contains %d bytes [%s]", msgSize, msgHex);
+    Log_debug(context->logger, "Frame data contains %d bytes [%s]", msg->length, msgHex);
 
     // Pop the first 2 bytes of the message containing the node id and amount of padding.
     uint16_t idAndPadding = Message_pop16(msg, NULL);
