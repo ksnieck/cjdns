@@ -226,6 +226,7 @@ static void handleEvent2(struct ETHInterface* context, struct Allocator* message
     // aligned when the idAndPadding is shifted off.
     Message_shift(msg, 2, NULL);
 
+    Log_debug(context->logger, "buf_len = %d", context->buf_len);
     int rc = read(context->bpf, msg->bytes, context->buf_len);
 
     if (rc < 0) {
@@ -246,10 +247,11 @@ static void handleEvent2(struct ETHInterface* context, struct Allocator* message
     struct ether_header ethHdr;
     Message_pop(msg, &ethHdr, sizeof(struct ether_header), NULL);
 
-    uint8_t msgHex[msg->length*2];
-    int hret = Hex_encode(msgHex, msg->length*2, (const uint8_t *)msg->bytes, msg->length);
+    uint8_t msgSize = bpfhdr.bh_caplen-sizeof(struct ether_header);
+    uint8_t msgHex[msgSize*2];
+    int hret = Hex_encode(msgHex, msgSize*2, (const uint8_t *)msg->bytes, msgSize);
     if (hret < 1) Log_debug(context->logger, "Hex_encode error %d", hret);
-    Log_debug(context->logger, "Frame data contains %d bytes [%s]", msg->length, msgHex);
+    Log_debug(context->logger, "Frame data contains %d bytes [%s]", msgSize, msgHex);
 
     // Pop the first 2 bytes of the message containing the node id and amount of padding.
     uint16_t idAndPadding = Message_pop16(msg, NULL);
