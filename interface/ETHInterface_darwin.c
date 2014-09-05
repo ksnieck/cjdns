@@ -247,14 +247,13 @@ static void handleEvent2(struct ETHInterface* context, struct Allocator* message
     struct ether_header ethHdr;
     Message_pop(msg, &ethHdr, sizeof(struct ether_header), NULL);
 
-    uint8_t msgSize = bpfhdr.bh_caplen-sizeof(struct ether_header);
+    int msgSize = bpfhdr.bh_caplen-sizeof(struct ether_header);
 
-    /* // prints whole packet in hex for debug
+    // prints whole packet in hex for debug
     uint8_t msgHex[msgSize*2];
     int hret = Hex_encode(msgHex, msgSize*2, (const uint8_t *)msg->bytes, msgSize);
     if (hret < 1) Log_debug(context->logger, "Hex_encode error %d", hret);
     Log_debug(context->logger, "Frame data contains %d bytes [%s]", msgSize, msgHex);
-    */
 
     // Pop the first 2 bytes of the message containing the node id and amount of padding.
     uint16_t idAndPadding = Message_pop16(msg, NULL);
